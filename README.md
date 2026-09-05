@@ -1,102 +1,153 @@
-# flaretunnel-manager
+# FlareTunnel Manager
 
-`flaretunnel-manager` est une couche d’orchestration Go pour le fork public [johndoe237/FlareTunnel](https://github.com/johndoe237/FlareTunnel). Le manager interroge Cloudflare pour connaître l’état réel, puis délègue la création, la suppression ou l’utilisation des Workers à FlareTunnel.
+> A secure orchestration layer for creating, removing, and serving Cloudflare Workers through [FlareTunnel](https://github.com/johndoe237/FlareTunnel).
 
-## Image unique et version du fork
+[![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/)
+[![Containerized](https://img.shields.io/badge/runtime-Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![License](https://img.shields.io/badge/license-review%20upstream%20terms-informational)](https://github.com/johndoe237/FlareTunnel)
 
-Le `Dockerfile` produit une image unique utilisable telle quelle en Docker local, sur un VPS ou sur un PaaS compatible avec les images Docker. Le fork est cloné et vérifié sur le commit exact `451990dcfc5abd1e698c4bf8aca312471799e07b`. Les trois fichiers de blacklist sont copiés dans `/opt/flaretunnel/` :
+FlareTunnel Manager is a small Go service that coordinates Cloudflare account state with the FlareTunnel command-line application. It deliberately keeps Cloudflare orchestration, validation, temporary credential handling, and deployment concerns separate from the Worker and tunnel implementation maintained by FlareTunnel.
 
-- `/opt/flaretunnel/blacklist-minimal.txt` (`minimal`, défaut) ;
-- `/opt/flaretunnel/blacklist.txt` (`full`) ;
-- `/opt/flaretunnel/blacklist-aggressive.txt` (`aggressive`).
+The project is distributed as **one reproducible container image**. The same image can be built once and deployed to a local Docker host, a VPS, or any container-compatible PaaS.
 
-Le choix se fait uniquement avec `FLARETUNNEL_BLACKLIST`. Il n’existe volontairement pas de variable utilisateur `FLARETUNNEL_BLACKLIST_DIR` : aucun chemin de blacklist arbitraire n’est accepté. Toute valeur de niveau inconnue retombe prudemment sur `minimal`.
+## Highlights
 
-Construire l’image :
+- **Bounded deletion:** automated cleanup always uses `cleanup --count N --yes` and never invokes the legacy unbounded cleanup operation.
+- **Real-state reconciliation:** only Workers whose names begin with `flaretunnel-` are counted.
+- **Safe retries:** create and delete operations re-check Cloudflare state before each attempt, retry at most three times per account, and continue processing subsequent accounts after a failure.
+- **Strict input validation:** active-mode JSON must be a non-empty array with required fields and non-negative worker targets.
+- **Multi-account tunnel bootstrap:** `use` writes one temporary account configuration, runs one `list` operation, removes temporary credentials, and then replaces the manager process with the tunnel process.
+- **Embedded blacklists:** the three upstream blacklist files are packaged into the runtime image and selected by level, not by an arbitrary user-supplied path.
+- **Secret hygiene:** credentials are written with restrictive permissions and are redacted from operational errors and logs.
 
-```bash
-docker build -t flaretunnel-manager:latest .
+## Upstream version
+
+The image builds the public FlareTunnel fork at the exact commit below:
+
+```text
+451990dcfc5abd1e698c4bf8aca312471799e07b
 ```
 
-Le Dockerfile compile le package complet du fork avec `go build .`, et le manager avec `go build ./cmd/manager`. Aucun secret n’est incorporé dans l’image.
+The Docker build checks the resolved Git commit before compiling the complete upstream package. The manager does not reimplement FlareTunnel functionality.
 
-## Modes
+## Operating modes
 
-| Mode | Variable JSON | Fonction |
+| Mode | Active variable | Behavior of `target_workers` |
 |---|---|---|
-| `create` | `CF_CREATE_ACCOUNTS` | Réconcilie la cible finale `target_workers` ; crée uniquement le manque constaté. |
-| `delete` | `CF_DELETE_ACCOUNTS` | Supprime au maximum `target_workers` Workers `flaretunnel-*`. Cette valeur est un **nombre à supprimer**, pas une cible finale restante. |
-| `use` | `CF_USE_ACCOUNTS` | Écrit une configuration multi-compte, exécute une seule opération `list`, conserve les endpoints, supprime les credentials temporaires, puis lance le tunnel. |
+| `create` | `CF_CREATE_ACCOUNTS` | Desired final number of `flaretunnel-*` Workers. |
+| `delete` | `CF_DELETE_ACCOUNTS` | Number of `flaretunnel-*` Workers to remove. It is not a desired final count. |
+| `use` | `CF_USE_ACCOUNTS` | No target is required. Accounts are used to build the tunnel endpoint set. |
 
-Les comptes sont traités séquentiellement. `create` et `delete` recomptent l’état réel avant chaque tentative, avec au maximum trois tentatives par compte, et continuent avec les comptes suivants après un échec.
+Accounts are processed sequentially. In `create`, the manager calculates `missing = target_workers - existing`. In `delete`, it calculates the remaining requested deletion count and caps each cleanup request by the number of Workers that actually exist.
 
-En mode `delete`, l’appel automatisé est toujours borné :
+A bounded delete request is equivalent to:
 
 ```text
 cleanup --account <ACCOUNT> --count <N> --yes
 ```
 
-Le manager ne peut pas appeler l’ancien cleanup global sans `--count`. Si l’état réel est nul, ou si `target_workers` vaut zéro, aucun cleanup n’est lancé. Après chaque opération, la progression est calculée à partir de la différence réelle entre les deux comptages et plafonnée à la quantité demandée.
+If the requested deletion count is zero, or if Cloudflare reports no matching Workers, no cleanup command is executed.
 
 ## Configuration
 
-Variables prises en charge :
+| Variable | Required | Default | Description |
+|---|---:|---:|---|
+| `MODE` | Yes | — | `create`, `delete`, or `use`. |
+| `PORT` | No | `8080` | Port passed to the tunnel process. |
+| `FLARETUNNEL_MODE` | No | `random` | `random` or `round-robin`. Unknown values fall back to `random`. |
+| `FLARETUNNEL_BLACKLIST` | No | `minimal` | `minimal`, `full`, or `aggressive`. Unknown values fall back to `minimal`. |
+| `CF_CREATE_ACCOUNTS` | In `create` | — | JSON array of accounts to reconcile. |
+| `CF_DELETE_ACCOUNTS` | In `delete` | — | JSON array of accounts to clean up. |
+| `CF_USE_ACCOUNTS` | In `use` | — | JSON array of accounts used by the tunnel. |
+| `CF_API_BASE_URL` | No | Cloudflare API | Optional API endpoint override for controlled testing. |
 
-| Variable | Défaut | Description |
-|---|---:|---|
-| `MODE` | obligatoire | `create`, `delete` ou `use`. |
-| `PORT` | `8080` | Port transmis à `tunnel`. |
-| `FLARETUNNEL_MODE` | `random` | `random` ou `round-robin`. Valeur inconnue : `random`. |
-| `FLARETUNNEL_BLACKLIST` | `minimal` | `minimal`, `full` ou `aggressive`. Valeur inconnue : `minimal`. |
-| `CF_CREATE_ACCOUNTS` | — | Requis seulement en mode `create`. |
-| `CF_DELETE_ACCOUNTS` | — | Requis seulement en mode `delete`. |
-| `CF_USE_ACCOUNTS` | — | Requis seulement en mode `use`. |
+The active account variable must contain a non-empty JSON array. Each account requires `name`, `api_token`, and `account_id`. `target_workers` is required in `create` and `delete`, must be an integer greater than or equal to zero, and is ignored in `use`.
 
-Le JSON actif doit être un tableau non vide. Chaque entrée exige `name`, `api_token` et `account_id`. `target_workers` est obligatoire en `create` et `delete`, doit être entier et supérieur ou égal à zéro, et est ignoré en `use`. Une entrée invalide fait échouer toute la validation : aucun traitement partiel n’est réalisé. Les JSON des modes inactifs ne sont pas exigés.
-
-Exemple :
+Example account object:
 
 ```json
-[{"name":"main","api_token":"TOKEN_INJECTE","account_id":"ACCOUNT_ID","target_workers":20}]
+[
+  {
+    "name": "main",
+    "api_token": "INJECTED_SECRET",
+    "account_id": "CLOUDFLARE_ACCOUNT_ID",
+    "target_workers": 20
+  }
+]
 ```
 
-Ne mettez jamais de token réel dans Git, le README, les tests, les logs ou l’image. Utilisez `.env.example` comme modèle, puis un fichier `.env` non commité ou le gestionnaire de secrets de la plateforme.
+Do not place real credentials in Git, Dockerfiles, image layers, documentation, tests, or shell history. Use `.env.example` as a template and inject real values through a protected local file or the secret manager of your platform.
 
-## Docker local
+## Embedded blacklist files
+
+The runtime image contains these upstream files:
+
+| Level | File in the container |
+|---|---|
+| `minimal` | `/opt/flaretunnel/blacklist-minimal.txt` |
+| `full` | `/opt/flaretunnel/blacklist.txt` |
+| `aggressive` | `/opt/flaretunnel/blacklist-aggressive.txt` |
+
+The manager intentionally does not support `FLARETUNNEL_BLACKLIST_DIR`. Users can select a level, but cannot provide an arbitrary blacklist path.
+
+## Quick start with Docker
 
 ```bash
 cp .env.example .env
-# Modifier .env hors du dépôt avec les vrais secrets
-docker build -t flaretunnel-manager .
-docker run --rm --env-file .env -p 8080:8080 flaretunnel-manager
+# Edit .env locally. Never commit it.
+docker build -t flaretunnel-manager:latest .
+docker run --rm --env-file .env -p 8080:8080 flaretunnel-manager:latest
 ```
 
-Pour `create` ou `delete`, utilisez respectivement `CF_CREATE_ACCOUNTS` ou `CF_DELETE_ACCOUNTS` dans `.env`. En `use`, le tunnel est long-running et devient le processus principal du conteneur grâce à `exec`; arrêtez-le avec `docker stop`. Les éventuels fichiers montés doivent être configurés par la plateforme, mais les blacklists officielles restent celles embarquées dans `/opt/flaretunnel`.
+The image entrypoint is `/usr/local/bin/flaretunnel-manager`. In `use` mode, the manager eventually executes FlareTunnel so that the tunnel becomes the container's main process. The container is therefore long-running in `use` mode and one-shot in normal `create` and `delete` runs.
 
-## VPS
+## VPS deployment
 
-Installez Docker ou un runtime OCI compatible sur le VPS, puis récupérez l’image publiée ou construisez-la depuis ce dépôt. Injectez les variables avec un fichier protégé (`chmod 600 .env`) ou le mécanisme de secrets de votre système, sans les inscrire dans l’image ni la commande shell persistée :
+Install Docker or an OCI-compatible runtime on the VPS. Pull a previously built image or build this repository on the VPS. Store the environment file outside the repository with restrictive permissions, or use the VPS secret manager:
 
 ```bash
-docker pull IMAGE_PUBLIEE
-# ou : docker build -t flaretunnel-manager .
-docker run -d --name flaretunnel-manager --restart unless-stopped \
-  --env-file /chemin/protege/.env -p 8080:8080 IMAGE_PUBLIEE
+chmod 600 /secure/path/flaretunnel-manager.env
+docker pull IMAGE_REFERENCE
+
+docker run -d \
+  --name flaretunnel-manager \
+  --restart unless-stopped \
+  --env-file /secure/path/flaretunnel-manager.env \
+  -p 8080:8080 \
+  IMAGE_REFERENCE
 ```
 
-Aucun binaire Go n’a à être installé ou exécuté directement sur l’hôte : le VPS exécute l’image Docker. Pour `create` et `delete`, le conteneur termine lorsque l’opération est finie ; pour `use`, il reste actif comme service de tunnel.
+The VPS does not need Go installed. It runs the container image directly.
 
-## PaaS compatible Docker
+## PaaS deployment
 
-Sélectionnez cette même image publiée ou le `Dockerfile`, définissez les secrets dans le gestionnaire de secrets du PaaS, configurez le processus principal sur l’ENTRYPOINT de l’image, et exposez le port `PORT` si le fournisseur le demande. Le health check peut vérifier la disponibilité du port en mode `use`. Ne supposez aucun fournisseur particulier et ne stockez pas les tokens dans des variables publiques ou dans le dépôt.
+Select this Docker image or its Dockerfile in the PaaS deployment configuration. Define the account JSON and other sensitive values in the platform secret manager. Configure the image entrypoint as the main process, expose `PORT` when required by the platform, and use a TCP or HTTP health check appropriate for `use` mode. Do not assume that a PaaS filesystem is persistent; the manager treats credentials as temporary and keeps the runtime endpoint file only for the lifetime of the tunnel container.
 
-## Fichiers temporaires et sécurité
+## Security model
 
-Les credentials sont écrits en `0600` dans un répertoire temporaire isolé par compte. En `use`, tous les comptes sont placés dans un unique fichier temporaire pour l’unique commande `list`; ce fichier est supprimé avant le lancement du tunnel, tandis que `flaretunnel_endpoints.json` est conservé. Les répertoires temporaires sont nettoyés à la fin du traitement. Les erreurs et sorties de processus masquent les secrets structurés et les valeurs sensibles présentes dans l’environnement.
+The manager validates the complete active JSON before processing any account. It does not partially process an invalid list. Per-account configuration files are created with mode `0600` and are removed after the account operation. In `use`, the combined credential file is removed before the tunnel process starts. Error output redacts sensitive environment values and structured credential fields.
 
-## Tests et compilation
+Cloudflare API tokens should be scoped to the minimum permissions required by the selected operation. Rotate tokens through the Cloudflare dashboard or your secret manager rather than editing source files.
 
-Les commandes suivantes compilent et vérifient le projet complet :
+## Project layout
+
+```text
+.
+├── cmd/manager/              # Process entrypoint and mode selection
+├── internal/business/        # Create, delete, and use orchestration
+├── internal/cloudflare/      # Cloudflare Worker discovery and counting
+├── internal/config/          # Environment configuration and defaults
+├── internal/flaretunnel/     # FlareTunnel commands and file contracts
+├── internal/logging/         # Secret-aware operational logging
+├── internal/runtime/         # Temporary directory lifecycle
+├── internal/validation/      # Strict account JSON validation
+├── Dockerfile                # Reproducible multi-stage image build
+└── .env.example              # Non-secret configuration template
+```
+
+## Development and verification
+
+The following commands validate the complete manager package:
 
 ```bash
 gofmt -w .
@@ -105,12 +156,18 @@ go vet ./...
 go build ./cmd/manager
 ```
 
-Un build Docker reproductible se vérifie avec :
+To validate the container build on a machine with Docker:
 
 ```bash
 docker build -t flaretunnel-manager:test .
 ```
 
-## Licence et publication
+## License and upstream notices
 
-La publication GitHub du projet est effectuée uniquement sur demande explicite. Vérifiez les licences du fork avant toute redistribution publique.
+Review the upstream FlareTunnel license and terms before redistribution. This repository is an orchestration layer and does not replace the legal or operational requirements of Cloudflare or the upstream project.
+
+## References
+
+[1]: https://github.com/johndoe237/FlareTunnel "FlareTunnel upstream fork"
+[2]: https://github.com/johndoe237/FlareTunnel/commit/451990dcfc5abd1e698c4bf8aca312471799e07b "Pinned FlareTunnel commit"
+[3]: https://docs.docker.com/ "Docker documentation"

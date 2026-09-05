@@ -113,4 +113,4 @@ docker build -t flaretunnel-manager:test .
 
 ## Licence et publication
 
-Aucune publication GitHub n’est effectuée par cette mission. Vérifiez les licences du fork avant toute redistribution publique.
+La publication GitHub du projet est effectuée uniquement sur demande explicite. Vérifiez les licences du fork avant toute redistribution publique.

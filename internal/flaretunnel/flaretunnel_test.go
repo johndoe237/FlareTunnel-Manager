@@ -114,6 +114,22 @@ func TestRunnerErrorPropagates(t *testing.T) {
 	}
 }
 
+func TestEnvironmentWithOverridesReplacesExistingValues(t *testing.T) {
+	got := environmentWithOverrides([]string{"PATH=/bin", "AUTH_PROXY_BASIC=old", "OTHER=value"}, map[string]string{"AUTH_PROXY_BASIC": "new"})
+	count := 0
+	for _, entry := range got {
+		if entry == "AUTH_PROXY_BASIC=new" {
+			count++
+		}
+		if entry == "AUTH_PROXY_BASIC=old" {
+			t.Fatal("old AUTH_PROXY_BASIC value was retained")
+		}
+	}
+	if count != 1 {
+		t.Fatalf("AUTH_PROXY_BASIC occurrences = %d, want exactly one", count)
+	}
+}
+
 func TestSanitizeOutputRedactsEnvironmentSecrets(t *testing.T) {
 	t.Setenv("CF_API_TOKEN", "do-not-log-this-token")
 	got := SanitizeOutput(`api_token: do-not-log-this-token`)

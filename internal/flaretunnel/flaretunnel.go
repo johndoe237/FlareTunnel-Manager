@@ -112,11 +112,28 @@ func (r *Runner) Launch(ctx context.Context, dir string, args []string, env map[
 	if err := os.Chdir(dir); err != nil {
 		return fmt.Errorf("cannot chdir to runtime dir: %w", err)
 	}
-	processEnv := os.Environ()
-	for key, value := range env {
-		processEnv = append(processEnv, key+"="+value)
-	}
+	processEnv := environmentWithOverrides(os.Environ(), env)
 	return syscall.Exec(bin, append([]string{bin}, args...), processEnv)
+}
+
+func environmentWithOverrides(base []string, updates map[string]string) []string {
+	if len(updates) == 0 {
+		return append([]string(nil), base...)
+	}
+	result := make([]string, 0, len(base)+len(updates))
+	for _, entry := range base {
+		key, _, ok := strings.Cut(entry, "=")
+		if ok {
+			if _, overridden := updates[key]; overridden {
+				continue
+			}
+		}
+		result = append(result, entry)
+	}
+	for key, value := range updates {
+		result = append(result, key+"="+value)
+	}
+	return result
 }
 
 func (r *Runner) run(ctx context.Context, dir string, args []string) error {

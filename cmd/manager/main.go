@@ -84,7 +84,7 @@ func run() int {
 		// Blacklists are shipped by the image; callers select only the level.
 		blacklistPath := filepath.Join("/opt/flaretunnel", cfg.BlacklistFile)
 		log.Infof("MODE=use: bootstrapping %d account(s).", len(accounts))
-		if err := business.Use(ctx, accounts, runner, rt, log, cfg.Port, cfg.RotationMode, blacklistPath); err != nil {
+		if err := business.Use(ctx, accounts, runner, rt, log, cfg.Port, cfg.RotationMode, blacklistPath, cfg.AuthProxyBasic); err != nil {
 			log.Errorf("Bootstrap failed: %v", err)
 			return 1
 		}

@@ -29,7 +29,7 @@ type FlareTunnelRunner interface {
 	Cleanup(ctx context.Context, dir, account string, count int) error
 	List(ctx context.Context, dir string) error
 	TunnelArgs(port int, mode, blacklistFile string) []string
-	Launch(ctx context.Context, dir string, args []string) error
+	Launch(ctx context.Context, dir string, args []string, env map[string]string) error
 }
 
 // CloudflareCounter counts the FlareTunnel Workers of an account.
@@ -247,7 +247,7 @@ func deleteAccount(ctx context.Context, acc validation.Account, runner FlareTunn
 //
 // flaretunnel_endpoints.json and the blacklist files are kept: they are
 // required by the tunnel mode after the exec.
-func Use(ctx context.Context, accounts []validation.Account, runner FlareTunnelRunner, rt *runtime.Manager, log *logging.Logger, port int, rotationMode, blacklistFile string) error {
+func Use(ctx context.Context, accounts []validation.Account, runner FlareTunnelRunner, rt *runtime.Manager, log *logging.Logger, port int, rotationMode, blacklistFile, authProxyBasic string) error {
 	dir, err := rt.UseDir()
 	if err != nil {
 		return err
@@ -304,7 +304,7 @@ func Use(ctx context.Context, accounts []validation.Account, runner FlareTunnelR
 	// 6. Launch FlareTunnel in tunnel mode via exec. On success the manager
 	//    process is replaced by FlareTunnel, which becomes the main process.
 	log.Infof("Launching FlareTunnel tunnel (port %d, mode %s, blacklist %s).", port, rotationMode, filepath.Base(blacklistFile))
-	return runner.Launch(ctx, dir, runner.TunnelArgs(port, rotationMode, blacklistFile))
+	return runner.Launch(ctx, dir, runner.TunnelArgs(port, rotationMode, blacklistFile), map[string]string{"AUTH_PROXY_BASIC": authProxyBasic})
 }
 
 func writeConfigFile(path string, cfg flaretunnel.Config) error {

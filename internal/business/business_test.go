@@ -58,6 +58,7 @@ type cleanupCall struct {
 }
 type launchCall struct {
 	args []string
+	env  map[string]string
 }
 
 func (f *fakeRunner) Create(_ context.Context, _ string, account string, count int) error {
@@ -81,10 +82,10 @@ func (f *fakeRunner) List(_ context.Context, _ string) error {
 func (f *fakeRunner) TunnelArgs(port int, mode, blacklistFile string) []string {
 	return []string{"tunnel", "--port", itoa(port), "--mode", mode, "--blacklist", blacklistFile}
 }
-func (f *fakeRunner) Launch(_ context.Context, _ string, args []string) error {
+func (f *fakeRunner) Launch(_ context.Context, _ string, args []string, env map[string]string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.launches = append(f.launches, launchCall{args})
+	f.launches = append(f.launches, launchCall{args: args, env: env})
 	return f.launchErr
 }
 
@@ -344,7 +345,7 @@ func TestUsePreparesEndpointsRemovesCredentialsAndLaunches(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = Use(context.Background(), accounts, runner, m, quietLogger(), 9090, "random", blacklist)
+	err = Use(context.Background(), accounts, runner, m, quietLogger(), 9090, "random", blacklist, "dXNlcjE6cGFzczE=")
 	if err != nil {
 		t.Fatalf("Use() error = %v", err)
 	}
@@ -371,6 +372,9 @@ func TestUsePreparesEndpointsRemovesCredentialsAndLaunches(t *testing.T) {
 	if !strings.Contains(args, "--blacklist "+blacklist) {
 		t.Errorf("launch args missing blacklist: %s", args)
 	}
+	if runner.launches[0].env["AUTH_PROXY_BASIC"] != "dXNlcjE6cGFzczE=" {
+		t.Errorf("launch env = %+v, want AUTH_PROXY_BASIC only", runner.launches[0].env)
+	}
 }
 
 func TestUseFailsWhenNoEndpoint(t *testing.T) {
@@ -382,7 +386,7 @@ func TestUseFailsWhenNoEndpoint(t *testing.T) {
 	os.WriteFile(blacklist, []byte("# t\n"), 0o644)
 
 	// No endpoints file: list "succeeds" but no endpoints -> error.
-	if err := Use(context.Background(), accounts, runner, m, quietLogger(), 8080, "random", blacklist); err == nil {
+	if err := Use(context.Background(), accounts, runner, m, quietLogger(), 8080, "random", blacklist, "dXNlcjE6cGFzczE="); err == nil {
 		t.Fatal("expected error when no endpoint is usable")
 	}
 	// Credentials must be cleaned even on failure.
@@ -400,7 +404,7 @@ func TestUseListFailureCleansCredentials(t *testing.T) {
 
 	// Make List fail by pointing the runner at a missing binary.
 	badRunner := &failingRunner{}
-	if err := Use(context.Background(), accounts, badRunner, m, quietLogger(), 8080, "random", blacklist); err == nil {
+	if err := Use(context.Background(), accounts, badRunner, m, quietLogger(), 8080, "random", blacklist, "dXNlcjE6cGFzczE="); err == nil {
 		t.Fatal("expected error when flaretunnel list fails")
 	}
 	if _, statErr := os.Stat(filepath.Join(dir, "flaretunnel.json")); !os.IsNotExist(statErr) {
@@ -416,7 +420,9 @@ func (f *failingRunner) List(context.Context, string) error                 { re
 func (f *failingRunner) TunnelArgs(port int, mode, blacklistFile string) []string {
 	return []string{"tunnel", "--port", itoa(port), "--mode", mode, "--blacklist", blacklistFile}
 }
-func (f *failingRunner) Launch(context.Context, string, []string) error { return nil }
+func (f *failingRunner) Launch(context.Context, string, []string, map[string]string) error {
+	return nil
+}
 
 func itoa(i int) string { return strconv.Itoa(i) }
 

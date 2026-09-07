@@ -101,7 +101,7 @@ func (r *Runner) TunnelArgs(port int, mode, blacklistFile string) []string {
 	return []string{"tunnel", "--port", strconv.Itoa(port), "--mode", mode, "--blacklist", blacklistFile}
 }
 
-func (r *Runner) Launch(ctx context.Context, dir string, args []string) error {
+func (r *Runner) Launch(ctx context.Context, dir string, args []string, env map[string]string) error {
 	bin, err := exec.LookPath(r.Binary)
 	if err != nil {
 		if _, statErr := os.Stat(r.Binary); statErr != nil {
@@ -112,7 +112,11 @@ func (r *Runner) Launch(ctx context.Context, dir string, args []string) error {
 	if err := os.Chdir(dir); err != nil {
 		return fmt.Errorf("cannot chdir to runtime dir: %w", err)
 	}
-	return syscall.Exec(bin, append([]string{bin}, args...), os.Environ())
+	processEnv := os.Environ()
+	for key, value := range env {
+		processEnv = append(processEnv, key+"="+value)
+	}
+	return syscall.Exec(bin, append([]string{bin}, args...), processEnv)
 }
 
 func (r *Runner) run(ctx context.Context, dir string, args []string) error {

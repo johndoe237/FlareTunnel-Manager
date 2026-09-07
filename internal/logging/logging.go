@@ -19,7 +19,7 @@ func New() *Logger { return &Logger{} }
 
 // Infof writes an informational log line.
 func (l *Logger) Infof(format string, args ...any) {
-	fmt.Printf("[info] "+format+"\n", sanitize(fmt.Sprintf(format, args...)))
+	fmt.Printf("[info] %s\n", sanitize(fmt.Sprintf(format, args...)))
 }
 
 // Errorf writes an error log line.

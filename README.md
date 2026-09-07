@@ -20,12 +20,32 @@ The project is distributed as **one reproducible container image**. The same ima
 - **Embedded blacklists:** the three upstream blacklist files are packaged into the runtime image and selected by level, not by an arbitrary user-supplied path.
 - **Secret hygiene:** credentials are written with restrictive permissions and are redacted from operational errors and logs.
 
+## Mandatory proxy authentication
+
+`AUTH_PROXY` is a manager-only JSON secret required in `use` mode:
+
+```bash
+AUTH_PROXY='{"username":"user1","password":"pass1"}'
+```
+
+The manager parses this object in memory, encodes `username:password` as Base64,
+and passes only the resulting `AUTH_PROXY_BASIC` value to the FlareTunnel child
+process. For example, `user1:pass1` becomes `dXNlcjE6cGFzczE=`. The JSON,
+username, password, and encoded value are never written to runtime files or
+operational logs.
+
+FlareTunnel requires `AUTH_PROXY_BASIC` at startup and checks
+`Proxy-Authorization: Basic <AUTH_PROXY_BASIC>` before processing every
+supported method, including `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`,
+`OPTIONS`, and `CONNECT`. Missing or incorrect credentials receive `407 Proxy
+Authentication Required` and `Proxy-Authenticate: Basic`.
+
 ## Upstream version
 
 The image builds the public FlareTunnel fork at the exact commit below:
 
 ```text
-451990dcfc5abd1e698c4bf8aca312471799e07b
+ec5d11bb49b68ea8e8eedc0eff5d9f16c44e5d10
 ```
 
 The Docker build checks the resolved Git commit before compiling the complete upstream package. The manager does not reimplement FlareTunnel functionality.
@@ -53,6 +73,7 @@ If the requested deletion count is zero, or if Cloudflare reports no matching Wo
 | Variable | Required | Default | Description |
 |---|---:|---:|---|
 | `MODE` | Yes | — | `create`, `delete`, or `use`. |
+| `AUTH_PROXY` | In `use` | — | Strict JSON object with non-empty `username` and `password`. |
 | `PORT` | No | `8080` | Port passed to the tunnel process. |
 | `FLARETUNNEL_MODE` | No | `random` | `random` or `round-robin`. Unknown values fall back to `random`. |
 | `FLARETUNNEL_BLACKLIST` | No | `minimal` | `minimal`, `full`, or `aggressive`. Unknown values fall back to `minimal`. |
@@ -76,7 +97,7 @@ Example account object:
 ]
 ```
 
-Do not place real credentials in Git, Dockerfiles, image layers, documentation, tests, or shell history. Use `.env.example` as a template and inject real values through a protected local file or the secret manager of your platform.
+Do not place real credentials in Git, Dockerfiles, image layers, documentation, tests, or shell history. Use `.env.example` as a template and inject real values through a protected local file or the secret manager of your platform. `AUTH_PROXY` is not required in `create` or `delete` mode.
 
 ## Embedded blacklist files
 
@@ -121,11 +142,11 @@ The VPS does not need Go installed. It runs the container image directly.
 
 ## PaaS deployment
 
-Select this Docker image or its Dockerfile in the PaaS deployment configuration. Define the account JSON and other sensitive values in the platform secret manager. Configure the image entrypoint as the main process, expose `PORT` when required by the platform, and use a TCP or HTTP health check appropriate for `use` mode. Do not assume that a PaaS filesystem is persistent; the manager treats credentials as temporary and keeps the runtime endpoint file only for the lifetime of the tunnel container.
+Select this Docker image or its Dockerfile in the PaaS deployment configuration. Define `AUTH_PROXY`, the active account JSON, and API tokens in the platform secret manager. Configure the image entrypoint as the main process, expose `PORT` when required by the platform, and use a TCP or HTTP health check appropriate for `use` mode. Do not assume that a PaaS filesystem is persistent; the manager treats credentials as temporary and keeps the runtime endpoint file only for the lifetime of the tunnel container.
 
 ## Security model
 
-The manager validates the complete active JSON before processing any account. It does not partially process an invalid list. Per-account configuration files are created with mode `0600` and are removed after the account operation. In `use`, the combined credential file is removed before the tunnel process starts. Error output redacts sensitive environment values and structured credential fields.
+The manager validates the complete active JSON before processing any account. It does not partially process an invalid list. Per-account configuration files are created with mode `0600` and are removed after the account operation. In `use`, the combined credential file is removed before the tunnel process starts. `AUTH_PROXY_BASIC` is passed only through the FlareTunnel process environment and is never placed in `flaretunnel.json` or another runtime file. Error output redacts sensitive environment values and structured credential fields.
 
 Cloudflare API tokens should be scoped to the minimum permissions required by the selected operation. Rotate tokens through the Cloudflare dashboard or your secret manager rather than editing source files.
 
@@ -169,5 +190,5 @@ Review the upstream FlareTunnel license and terms before redistribution. This re
 ## References
 
 [1]: https://github.com/johndoe237/FlareTunnel "FlareTunnel upstream fork"
-[2]: https://github.com/johndoe237/FlareTunnel/commit/451990dcfc5abd1e698c4bf8aca312471799e07b "Pinned FlareTunnel commit"
+[2]: https://github.com/johndoe237/FlareTunnel/commit/ec5d11bb49b68ea8e8eedc0eff5d9f16c44e5d10 "Pinned FlareTunnel commit"
 [3]: https://docs.docker.com/ "Docker documentation"

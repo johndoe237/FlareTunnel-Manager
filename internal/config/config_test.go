@@ -7,6 +7,11 @@ import (
 
 func setEnv(t *testing.T, kv map[string]string) {
 	t.Helper()
+	if kv["MODE"] == "use" {
+		if _, ok := kv["AUTH_PROXY"]; !ok {
+			kv["AUTH_PROXY"] = `{"username":"test-user","password":"test-password"}`
+		}
+	}
 	for k, v := range kv {
 		if err := os.Setenv(k, v); err != nil {
 			t.Fatalf("setenv %s: %v", k, err)

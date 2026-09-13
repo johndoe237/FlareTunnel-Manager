@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"flaretunnel-manager/internal/ca"
 	"flaretunnel-manager/internal/cloudflare"
 	"flaretunnel-manager/internal/flaretunnel"
 	"flaretunnel-manager/internal/logging"
@@ -248,9 +249,26 @@ func deleteAccount(ctx context.Context, acc validation.Account, runner FlareTunn
 // flaretunnel_endpoints.json and the blacklist files are kept: they are
 // required by the tunnel mode after the exec.
 func Use(ctx context.Context, accounts []validation.Account, runner FlareTunnelRunner, rt *runtime.Manager, log *logging.Logger, port int, rotationMode, blacklistFile, authProxyBasic string) error {
+	return use(ctx, accounts, runner, rt, log, port, rotationMode, blacklistFile, authProxyBasic, "", "")
+}
+
+// UseWithCA is the production MODE=use path. It requires the reviewed public
+// CA and matching private key and passes only file paths to FlareTunnel.
+func UseWithCA(ctx context.Context, accounts []validation.Account, runner FlareTunnelRunner, rt *runtime.Manager, log *logging.Logger, port int, rotationMode, blacklistFile, authProxyBasic, caCertPath, caKeyB64 string) error {
+	return use(ctx, accounts, runner, rt, log, port, rotationMode, blacklistFile, authProxyBasic, caCertPath, caKeyB64)
+}
+
+func use(ctx context.Context, accounts []validation.Account, runner FlareTunnelRunner, rt *runtime.Manager, log *logging.Logger, port int, rotationMode, blacklistFile, authProxyBasic, caCertPath, caKeyB64 string) error {
 	dir, err := rt.UseDir()
 	if err != nil {
 		return err
+	}
+	caKeyPath := ""
+	if caCertPath != "" || caKeyB64 != "" {
+		caKeyPath = filepath.Join(dir, "Flaretunnel-CA.key")
+		if err := ca.MaterializeKey(caCertPath, caKeyB64, caKeyPath); err != nil {
+			return fmt.Errorf("CA validation failed: %w", err)
+		}
 	}
 
 	// 1. Write flaretunnel.json with all accounts (temporary bootstrap file).
@@ -304,7 +322,12 @@ func Use(ctx context.Context, accounts []validation.Account, runner FlareTunnelR
 	// 6. Launch FlareTunnel in tunnel mode via exec. On success the manager
 	//    process is replaced by FlareTunnel, which becomes the main process.
 	log.Infof("Launching FlareTunnel tunnel (port %d, mode %s, blacklist %s).", port, rotationMode, filepath.Base(blacklistFile))
-	return runner.Launch(ctx, dir, runner.TunnelArgs(port, rotationMode, blacklistFile), map[string]string{"AUTH_PROXY_BASIC": authProxyBasic})
+	env := map[string]string{"AUTH_PROXY_BASIC": authProxyBasic}
+	if caKeyPath != "" {
+		env["FLARETUNNEL_CA_CERT_FILE"] = caCertPath
+		env["FLARETUNNEL_CA_KEY_FILE"] = caKeyPath
+	}
+	return runner.Launch(ctx, dir, runner.TunnelArgs(port, rotationMode, blacklistFile), env)
 }
 
 func writeConfigFile(path string, cfg flaretunnel.Config) error {

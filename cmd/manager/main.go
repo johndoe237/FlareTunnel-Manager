@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 
 	"flaretunnel-manager/internal/business"
+	"flaretunnel-manager/internal/ca"
 	"flaretunnel-manager/internal/config"
 	"flaretunnel-manager/internal/flaretunnel"
 	"flaretunnel-manager/internal/logging"
@@ -83,8 +84,13 @@ func run() int {
 		}
 		// Blacklists are shipped by the image; callers select only the level.
 		blacklistPath := filepath.Join("/opt/flaretunnel", cfg.BlacklistFile)
+		caCertPath, err := ca.ResolveCertificate()
+		if err != nil {
+			log.Errorf("CA setup failed: %v", err)
+			return 1
+		}
 		log.Infof("MODE=use: bootstrapping %d account(s).", len(accounts))
-		if err := business.Use(ctx, accounts, runner, rt, log, cfg.Port, cfg.RotationMode, blacklistPath, cfg.AuthProxyBasic); err != nil {
+		if err := business.UseWithCA(ctx, accounts, runner, rt, log, cfg.Port, cfg.RotationMode, blacklistPath, cfg.AuthProxyBasic, caCertPath, cfg.CAKeyB64); err != nil {
 			log.Errorf("Bootstrap failed: %v", err)
 			return 1
 		}

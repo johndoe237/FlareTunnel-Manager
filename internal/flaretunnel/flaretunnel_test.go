@@ -130,6 +130,18 @@ func TestEnvironmentWithOverridesReplacesExistingValues(t *testing.T) {
 	}
 }
 
+func TestEnvironmentWithOverridesDoesNotPassCAKeySecret(t *testing.T) {
+	got := environmentWithOverrides(
+		[]string{"PATH=/bin", "FLARETUNNEL_CA_KEY_B64=private"},
+		map[string]string{"FLARETUNNEL_CA_CERT_FILE": "/cert", "FLARETUNNEL_CA_KEY_FILE": "/key"},
+	)
+	for _, entry := range got {
+		if strings.HasPrefix(entry, "FLARETUNNEL_CA_KEY_B64=") {
+			t.Fatalf("private CA Base64 secret leaked to child environment: %q", entry)
+		}
+	}
+}
+
 func TestSanitizeOutputRedactsEnvironmentSecrets(t *testing.T) {
 	t.Setenv("CF_API_TOKEN", "do-not-log-this-token")
 	got := SanitizeOutput(`api_token: do-not-log-this-token`)

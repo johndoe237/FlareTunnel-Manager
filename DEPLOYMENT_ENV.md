@@ -168,7 +168,22 @@ AUTH_PROXY_BASIC
 FLARETUNNEL_BLACKLIST_DIR
 ```
 
-`AUTH_PROXY_BASIC` is generated internally by the manager and injected only into the FlareTunnel child process. The blacklist directory is fixed inside the image so that deployment selects only a reviewed blacklist level.
+`AUTH_PROXY_BASIC` is generated internally by the manager and injected only into
+the FlareTunnel child process. The blacklist directory is fixed inside the image so that deployment selects only a reviewed blacklist level.
+
+================================
+
+```env
+FLARETUNNEL_CA_KEY_B64=BASE64_ENCODED_RSA_PRIVATE_KEY
+```
+
+Required in `MODE=use`. This variable receives the Base64 value directly; do
+not add JSON or shell quoting around the decoded key. The public certificate
+is packaged in the manager image and resolved automatically, so no certificate
+path is required at deployment time. The manager verifies that the key matches
+the packaged certificate, materializes the key as an owner-only runtime file,
+and passes only certificate/key file paths to the FlareTunnel child. The secret
+value is never logged or inherited by the child process.
 
 ## Deployment notes
 
@@ -176,4 +191,7 @@ FLARETUNNEL_BLACKLIST_DIR
 - Keep API tokens and `AUTH_PROXY` in a secret manager or a file with restrictive permissions.
 - Do not commit `.env` files containing real values.
 - In `MODE=use`, expose the value of `PORT` through Docker, the VPS firewall, or the PaaS networking configuration.
-- The Docker image embeds the three blacklist files and builds the FlareTunnel fork at commit `b308a52ce3eb775c13744b23f2024bead88a4c99`.
+- The Docker image embeds the public `certs/Flaretunnel-CA.crt`, the three blacklist files, and builds the FlareTunnel fork at commit `866a6a55eba10ef14df33917963cb25e49bd7853`.
+- The public CA is installed under the image's application share directory and
+  discovered relative to the executable or current project directory; no
+  Ubuntu- or Debian-specific path is required.

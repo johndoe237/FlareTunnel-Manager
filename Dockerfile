@@ -2,7 +2,7 @@
 # Build FlareTunnel from the exact reviewed fork revision.
 FROM golang:1.22-alpine AS flaretunnel-build
 ARG FLARETUNNEL_REPO=https://github.com/johndoe237/FlareTunnel
-ARG FLARETUNNEL_SHA=9225176c4009bc1395972b6b69cd33f656d85679
+ARG FLARETUNNEL_SHA=866a6a55eba10ef14df33917963cb25e49bd7853
 RUN apk add --no-cache git ca-certificates \
     && git clone "${FLARETUNNEL_REPO}" /src/flaretunnel \
     && cd /src/flaretunnel \
@@ -23,6 +23,7 @@ FROM alpine:3.20
 RUN apk add --no-cache ca-certificates
 COPY --from=flaretunnel-build /out/flaretunnel /usr/local/bin/flaretunnel
 COPY --from=manager-build /out/flaretunnel-manager /usr/local/bin/flaretunnel-manager
+COPY certs/Flaretunnel-CA.crt /usr/local/share/flaretunnel-manager/Flaretunnel-CA.crt
 COPY --from=flaretunnel-build /src/flaretunnel/blacklist-minimal.txt /opt/flaretunnel/blacklist-minimal.txt
 COPY --from=flaretunnel-build /src/flaretunnel/blacklist.txt /opt/flaretunnel/blacklist.txt
 COPY --from=flaretunnel-build /src/flaretunnel/blacklist-aggressive.txt /opt/flaretunnel/blacklist-aggressive.txt

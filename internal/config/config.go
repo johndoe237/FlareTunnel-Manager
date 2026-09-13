@@ -49,6 +49,7 @@ type Config struct {
 	BlacklistLevel string
 	BlacklistFile  string
 	AuthProxyBasic string
+	CAKeyB64       string
 	CreateAccounts string
 	UseAccounts    string
 	DeleteAccounts string
@@ -123,6 +124,10 @@ func Load() (*Config, error) {
 		cfg.AuthProxyBasic, err = EncodeAuthProxy(os.Getenv("AUTH_PROXY"))
 		if err != nil {
 			return nil, err
+		}
+		cfg.CAKeyB64 = os.Getenv("FLARETUNNEL_CA_KEY_B64")
+		if strings.TrimSpace(cfg.CAKeyB64) == "" {
+			return nil, fmt.Errorf("FLARETUNNEL_CA_KEY_B64 is required in use mode")
 		}
 	}
 	return cfg, nil

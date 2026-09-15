@@ -191,7 +191,7 @@ value is never logged or inherited by the child process.
 - Keep API tokens and `AUTH_PROXY` in a secret manager or a file with restrictive permissions.
 - Do not commit `.env` files containing real values.
 - In `MODE=use`, expose the value of `PORT` through Docker, the VPS firewall, or the PaaS networking configuration.
-- The Docker image embeds the public `certs/Flaretunnel-MITM-CA.crt`, the three blacklist files, and builds the FlareTunnel fork at commit `768bbe100f322aef161b3bb333ec753dea69b2ab`.
+- The Docker image embeds the public `certs/Flaretunnel-MITM-CA.crt`, the three blacklist files, and builds the FlareTunnel fork at commit `9db018f28e84d0a868027ddec1fd775f049a6f31`.
 - The public CA is installed under the image's application share directory and
   discovered relative to the executable or current project directory; no
   Ubuntu- or Debian-specific path is required.

@@ -2,7 +2,7 @@
 # Build FlareTunnel from the exact reviewed fork revision.
 FROM golang:1.22-alpine AS flaretunnel-build
 ARG FLARETUNNEL_REPO=https://github.com/johndoe237/FlareTunnel
-ARG FLARETUNNEL_SHA=768bbe100f322aef161b3bb333ec753dea69b2ab
+ARG FLARETUNNEL_SHA=9db018f28e84d0a868027ddec1fd775f049a6f31
 RUN apk add --no-cache git ca-certificates \
     && git clone "${FLARETUNNEL_REPO}" /src/flaretunnel \
     && cd /src/flaretunnel \

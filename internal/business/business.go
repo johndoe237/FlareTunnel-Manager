@@ -324,8 +324,8 @@ func use(ctx context.Context, accounts []validation.Account, runner FlareTunnelR
 	log.Infof("Launching FlareTunnel tunnel (port %d, mode %s, blacklist %s).", port, rotationMode, filepath.Base(blacklistFile))
 	env := map[string]string{"AUTH_PROXY_BASIC": authProxyBasic}
 	if caKeyPath != "" {
-		env["FLARETUNNEL_CA_CERT_FILE"] = caCertPath
-		env["FLARETUNNEL_CA_KEY_FILE"] = caKeyPath
+		env["FLARETUNNEL_MITM_CA_CERT"] = caCertPath
+		env["FLARETUNNEL_MITM_CA_KEY"] = caKeyPath
 	}
 	return runner.Launch(ctx, dir, runner.TunnelArgs(port, rotationMode, blacklistFile), env)
 }

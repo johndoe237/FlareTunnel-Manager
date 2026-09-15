@@ -136,7 +136,7 @@ The manager rejects arbitrary blocklist paths and does not support `FLARETUNNEL_
 The `Dockerfile`:
 
 1. clones the FlareTunnel repository;
-2. verifies the exact commit `b37ccf2c7f61c536e225107554c90f01b1735558`;
+2. verifies the revision explicitly pinned in the `Dockerfile`;
 3. builds FlareTunnel;
 4. builds the manager;
 5. assembles a minimal Alpine image with public certificates and blocklists.

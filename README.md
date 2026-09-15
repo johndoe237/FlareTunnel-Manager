@@ -136,7 +136,7 @@ Le manager refuse les chemins de blacklist arbitraires et ne supporte pas `FLARE
 Le `Dockerfile` :
 
 1. clone le dépôt FlareTunnel ;
-2. vérifie le commit exact `b37ccf2c7f61c536e225107554c90f01b1735558` ;
+2. vérifie la révision explicitement épinglée dans le `Dockerfile` ;
 3. compile FlareTunnel ;
 4. compile le manager ;
 5. assemble une image Alpine minimale avec certificats publics et blacklists.

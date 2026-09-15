@@ -179,7 +179,6 @@ docker build -t flaretunnel-manager:test .
 ## Références
 
 - [FlareTunnel](https://github.com/johndoe237/FlareTunnel)
-- [Commit FlareTunnel épinglé](https://github.com/johndoe237/FlareTunnel/commit/b37ccf2c7f61c536e225107554c90f01b1735558)
 - [Documentation Docker](https://docs.docker.com/)
 
 ## Section obligatoire des variables d’environnement

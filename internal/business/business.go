@@ -291,6 +291,9 @@ func use(ctx context.Context, accounts []validation.Account, runner FlareTunnelR
 		if err := ca.GenerateTransportCertificate(transportCACert, transportCAKeyPath, transportCertPath, transportKeyPath, san); err != nil {
 			return fmt.Errorf("transport certificate generation failed: %w", err)
 		}
+		if err := os.Remove(transportCAKeyPath); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("cannot remove temporary transport CA key: %w", err)
+		}
 	}
 
 	// 1. Write flaretunnel.json with all accounts (temporary bootstrap file).

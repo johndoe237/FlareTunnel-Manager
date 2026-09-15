@@ -89,8 +89,13 @@ func run() int {
 			log.Errorf("CA setup failed: %v", err)
 			return 1
 		}
+		transportCertPath, err := ca.ResolveTransportCertificate()
+		if err != nil {
+			log.Errorf("Transport CA setup failed: %v", err)
+			return 1
+		}
 		log.Infof("MODE=use: bootstrapping %d account(s).", len(accounts))
-		if err := business.UseWithCA(ctx, accounts, runner, rt, log, cfg.Port, cfg.RotationMode, blacklistPath, cfg.AuthProxyBasic, caCertPath, cfg.CAKeyB64); err != nil {
+		if err := business.UseWithTransportCA(ctx, accounts, runner, rt, log, cfg.Port, cfg.RotationMode, blacklistPath, cfg.AuthProxyBasic, caCertPath, cfg.CAKeyB64, transportCertPath, cfg.TransportCAKeyB64, cfg.TransportSAN); err != nil {
 			log.Errorf("Bootstrap failed: %v", err)
 			return 1
 		}

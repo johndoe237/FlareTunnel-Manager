@@ -43,6 +43,8 @@ func TestLoadUseProducesEncodedValueWithoutRetainingJSON(t *testing.T) {
 	t.Setenv("MODE", "use")
 	t.Setenv("AUTH_PROXY", `{"username":"user1","password":"pass1"}`)
 	t.Setenv("FLARETUNNEL_MITM_CA_KEY_B64", "test-key")
+	t.Setenv("FLARETUNNEL_TRANSPORT_CA_KEY_B64", "test-transport-key")
+	t.Setenv("FLARETUNNEL_TLS_SAN", "proxy.example.test")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)

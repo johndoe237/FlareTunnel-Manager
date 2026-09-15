@@ -14,6 +14,12 @@ func setEnv(t *testing.T, kv map[string]string) {
 		if _, ok := kv["FLARETUNNEL_MITM_CA_KEY_B64"]; !ok {
 			kv["FLARETUNNEL_MITM_CA_KEY_B64"] = "test-key"
 		}
+		if _, ok := kv["FLARETUNNEL_TRANSPORT_CA_KEY_B64"]; !ok {
+			kv["FLARETUNNEL_TRANSPORT_CA_KEY_B64"] = "test-transport-key"
+		}
+		if _, ok := kv["FLARETUNNEL_TLS_SAN"]; !ok {
+			kv["FLARETUNNEL_TLS_SAN"] = "proxy.example.test"
+		}
 	}
 	for k, v := range kv {
 		if err := os.Setenv(k, v); err != nil {
@@ -21,7 +27,11 @@ func setEnv(t *testing.T, kv map[string]string) {
 		}
 	}
 	if kv["MODE"] == "use" {
-		t.Cleanup(func() { _ = os.Unsetenv("FLARETUNNEL_MITM_CA_KEY_B64") })
+		t.Cleanup(func() {
+			_ = os.Unsetenv("FLARETUNNEL_MITM_CA_KEY_B64")
+			_ = os.Unsetenv("FLARETUNNEL_TRANSPORT_CA_KEY_B64")
+			_ = os.Unsetenv("FLARETUNNEL_TLS_SAN")
+		})
 	}
 }
 

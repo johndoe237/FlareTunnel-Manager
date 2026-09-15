@@ -43,16 +43,18 @@ var BlacklistLevelFile = map[string]string{
 }
 
 type Config struct {
-	Mode           Mode
-	Port           int
-	RotationMode   string
-	BlacklistLevel string
-	BlacklistFile  string
-	AuthProxyBasic string
-	CAKeyB64       string
-	CreateAccounts string
-	UseAccounts    string
-	DeleteAccounts string
+	Mode              Mode
+	Port              int
+	RotationMode      string
+	BlacklistLevel    string
+	BlacklistFile     string
+	AuthProxyBasic    string
+	CAKeyB64          string
+	TransportCAKeyB64 string
+	TransportSAN      string
+	CreateAccounts    string
+	UseAccounts       string
+	DeleteAccounts    string
 }
 
 type authProxyConfig struct {
@@ -128,6 +130,14 @@ func Load() (*Config, error) {
 		cfg.CAKeyB64 = os.Getenv("FLARETUNNEL_MITM_CA_KEY_B64")
 		if strings.TrimSpace(cfg.CAKeyB64) == "" {
 			return nil, fmt.Errorf("FLARETUNNEL_MITM_CA_KEY_B64 is required in use mode")
+		}
+		cfg.TransportCAKeyB64 = os.Getenv("FLARETUNNEL_TRANSPORT_CA_KEY_B64")
+		if strings.TrimSpace(cfg.TransportCAKeyB64) == "" {
+			return nil, fmt.Errorf("FLARETUNNEL_TRANSPORT_CA_KEY_B64 is required in use mode")
+		}
+		cfg.TransportSAN = strings.TrimSpace(os.Getenv("FLARETUNNEL_TLS_SAN"))
+		if cfg.TransportSAN == "" {
+			return nil, fmt.Errorf("FLARETUNNEL_TLS_SAN is required in use mode")
 		}
 	}
 	return cfg, nil

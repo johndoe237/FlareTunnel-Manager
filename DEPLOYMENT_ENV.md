@@ -191,8 +191,14 @@ value is never logged or inherited by the child process.
 - Keep API tokens and `AUTH_PROXY` in a secret manager or a file with restrictive permissions.
 - Do not commit `.env` files containing real values.
 - In `MODE=use`, expose the value of `PORT` through Docker, the VPS firewall, or the PaaS networking configuration.
-- The Docker image embeds the public `certs/Flaretunnel-MITM-CA.crt`, the three blacklist files, and builds the FlareTunnel fork at commit `9db018f28e84d0a868027ddec1fd775f049a6f31`.
-- The image also embeds `certs/Flaretunnel-TRANSPORT-CA.crt` as the public root reserved for the future transport TLS mode. It is packaged but not used by the current proxy implementation.
+- The Docker image embeds the public `certs/Flaretunnel-MITM-CA.crt`, the three blacklist files, and builds the FlareTunnel fork at commit `b37ccf2c7f61c536e225107554c90f01b1735558`.
+- The image also embeds `certs/Flaretunnel-TRANSPORT-CA.crt` as the public root used as the public root for the transport TLS listener; its private key is injected only at runtime.
 - The public CA is installed under the image's application share directory and
   discovered relative to the executable or current project directory; no
   Ubuntu- or Debian-specific path is required.
+
+## TLS de transport
+
+En `MODE=use`, le manager exige `FLARETUNNEL_TRANSPORT_CA_KEY_B64` et `FLARETUNNEL_TLS_SAN`. Il valide cette clé contre `certs/Flaretunnel-TRANSPORT-CA.crt`, génère dans le runtime un certificat serveur éphémère signé par ce CA, puis passe uniquement `FLARETUNNEL_TRANSPORT_CERT` et `FLARETUNNEL_TRANSPORT_KEY` au child FlareTunnel. Le secret du CA transport est purgé de l’environnement du child. Les SAN sont séparés par des espaces et peuvent être des noms DNS, IPv4 ou IPv6 ; une adresse d’écoute non spécifiée telle que `0.0.0.0` est refusée.
+
+FlareTunnel-Manager et omni-boot sont deux déploiements indépendants. Le manager embarque le binaire FlareTunnel dans sa propre image ; omni-boot ne dépend pas de cette image et ne reçoit que les certificats publics et l’adresse du proxy.

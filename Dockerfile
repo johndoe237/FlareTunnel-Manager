@@ -2,7 +2,7 @@
 # Build FlareTunnel from the exact reviewed fork revision.
 FROM golang:1.22-alpine AS flaretunnel-build
 ARG FLARETUNNEL_REPO=https://github.com/johndoe237/FlareTunnel
-ARG FLARETUNNEL_SHA=9db018f28e84d0a868027ddec1fd775f049a6f31
+ARG FLARETUNNEL_SHA=b37ccf2c7f61c536e225107554c90f01b1735558
 RUN apk add --no-cache git ca-certificates \
     && git clone "${FLARETUNNEL_REPO}" /src/flaretunnel \
     && cd /src/flaretunnel \
@@ -24,6 +24,7 @@ RUN apk add --no-cache ca-certificates
 COPY --from=flaretunnel-build /out/flaretunnel /usr/local/bin/flaretunnel
 COPY --from=manager-build /out/flaretunnel-manager /usr/local/bin/flaretunnel-manager
 COPY certs/Flaretunnel-MITM-CA.crt /usr/local/share/flaretunnel-manager/Flaretunnel-MITM-CA.crt
+# The transport private key is injected at runtime and is never copied here.
 COPY certs/Flaretunnel-TRANSPORT-CA.crt /usr/local/share/flaretunnel-manager/Flaretunnel-TRANSPORT-CA.crt
 COPY --from=flaretunnel-build /src/flaretunnel/blacklist-minimal.txt /opt/flaretunnel/blacklist-minimal.txt
 COPY --from=flaretunnel-build /src/flaretunnel/blacklist.txt /opt/flaretunnel/blacklist.txt

@@ -45,7 +45,7 @@ Authentication Required` and `Proxy-Authenticate: Basic`.
 The image builds the public FlareTunnel fork at the exact commit below:
 
 ```text
-9db018f28e84d0a868027ddec1fd775f049a6f31
+b37ccf2c7f61c536e225107554c90f01b1735558
 ```
 
 The Docker build checks the resolved Git commit before compiling the complete upstream package. The manager does not reimplement FlareTunnel functionality.
@@ -190,5 +190,5 @@ Review the upstream FlareTunnel license and terms before redistribution. This re
 ## References
 
 [1]: https://github.com/johndoe237/FlareTunnel "FlareTunnel upstream fork"
-[2]: https://github.com/johndoe237/FlareTunnel/commit/9db018f28e84d0a868027ddec1fd775f049a6f31 "Pinned FlareTunnel commit"
+[2]: https://github.com/johndoe237/FlareTunnel/commit/b37ccf2c7f61c536e225107554c90f01b1735558 "Pinned FlareTunnel commit"
 [3]: https://docs.docker.com/ "Docker documentation"

@@ -258,7 +258,13 @@ func UseWithCA(ctx context.Context, accounts []validation.Account, runner FlareT
 	return use(ctx, accounts, runner, rt, log, port, rotationMode, blacklistFile, authProxyBasic, caCertPath, caKeyB64)
 }
 
-func use(ctx context.Context, accounts []validation.Account, runner FlareTunnelRunner, rt *runtime.Manager, log *logging.Logger, port int, rotationMode, blacklistFile, authProxyBasic, caCertPath, caKeyB64 string) error {
+// UseWithTransportCA is the production path with independent MITM and
+// transport trust domains. The transport CA key is never passed to the child.
+func UseWithTransportCA(ctx context.Context, accounts []validation.Account, runner FlareTunnelRunner, rt *runtime.Manager, log *logging.Logger, port int, rotationMode, blacklistFile, authProxyBasic, mitmCertPath, mitmKeyB64, transportCertPath, transportKeyB64, san string) error {
+	return use(ctx, accounts, runner, rt, log, port, rotationMode, blacklistFile, authProxyBasic, mitmCertPath, mitmKeyB64, transportCertPath, transportKeyB64, san)
+}
+
+func use(ctx context.Context, accounts []validation.Account, runner FlareTunnelRunner, rt *runtime.Manager, log *logging.Logger, port int, rotationMode, blacklistFile, authProxyBasic, caCertPath, caKeyB64 string, transportArgs ...string) error {
 	dir, err := rt.UseDir()
 	if err != nil {
 		return err
@@ -268,6 +274,22 @@ func use(ctx context.Context, accounts []validation.Account, runner FlareTunnelR
 		caKeyPath = filepath.Join(dir, "Flaretunnel-MITM-CA.key")
 		if err := ca.MaterializeKey(caCertPath, caKeyB64, caKeyPath); err != nil {
 			return fmt.Errorf("CA validation failed: %w", err)
+		}
+	}
+	transportCertPath, transportKeyPath := "", ""
+	if len(transportArgs) != 0 {
+		if len(transportArgs) != 3 {
+			return fmt.Errorf("transport TLS requires certificate, key and SAN configuration")
+		}
+		transportCACert, transportCAKeyB64, san := transportArgs[0], transportArgs[1], transportArgs[2]
+		transportCAKeyPath := filepath.Join(dir, "Flaretunnel-TRANSPORT-CA.key")
+		if err := ca.MaterializeKeyFor(transportCACert, transportCAKeyB64, transportCAKeyPath, ca.TransportKeyEnv, "FlareTunnel transport CA"); err != nil {
+			return fmt.Errorf("transport CA validation failed: %w", err)
+		}
+		transportCertPath = filepath.Join(dir, "Flaretunnel-Transport.crt")
+		transportKeyPath = filepath.Join(dir, "Flaretunnel-Transport.key")
+		if err := ca.GenerateTransportCertificate(transportCACert, transportCAKeyPath, transportCertPath, transportKeyPath, san); err != nil {
+			return fmt.Errorf("transport certificate generation failed: %w", err)
 		}
 	}
 
@@ -326,6 +348,11 @@ func use(ctx context.Context, accounts []validation.Account, runner FlareTunnelR
 	if caKeyPath != "" {
 		env["FLARETUNNEL_MITM_CA_CERT"] = caCertPath
 		env["FLARETUNNEL_MITM_CA_KEY"] = caKeyPath
+	}
+	if transportCertPath != "" {
+		env["FLARETUNNEL_TRANSPORT_CERT"] = transportCertPath
+		env["FLARETUNNEL_TRANSPORT_KEY"] = transportKeyPath
+		env["FLARETUNNEL_TLS_SAN"] = transportArgs[2]
 	}
 	return runner.Launch(ctx, dir, runner.TunnelArgs(port, rotationMode, blacklistFile), env)
 }

@@ -1,56 +1,63 @@
+<div align="center">
+
 # FlareTunnel-Manager
 
-[Version française](README.md)
+**Secure Go orchestrator for provisioning, reconciling, and running FlareTunnel in a reproducible image.**
 
-`FlareTunnel-Manager` is a Go orchestration layer that prepares and runs FlareTunnel. It manages Cloudflare accounts, bounded Worker creation and deletion, secret validation, runtime certificate generation, and proxy startup.
+[![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/)
+[![Docker](https://img.shields.io/badge/runtime-Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![Cloudflare](https://img.shields.io/badge/API-Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)](https://developers.cloudflare.com/api/)
+[![Secrets](https://img.shields.io/badge/secrets-runtime--only-2F80ED)](#security-model)
 
-> The manager and `omni-boot` are separate deployments. The manager builds an image containing FlareTunnel. `omni-boot` runs in another image and connects to the proxy over the network.
+**[Français](README.md) · English**
+
+</div>
+
+FlareTunnel-Manager separates Cloudflare orchestration from the FlareTunnel proxy process. It validates configuration, reads the actual Worker state, performs bounded operations, prepares temporary credentials, and starts FlareTunnel with a minimal environment.
+
+The Docker image is designed to be built once and run on a local host, a VPS, or an OCI-compatible PaaS.
 
 ## Architecture
 
-```text
-FlareTunnel-Manager deployment
-  ├─ manager binary
-  ├─ pinned FlareTunnel binary
-  ├─ public MITM CA
-  ├─ public transport CA
-  └─ runtime-injected secrets
-       │
-       └─ starts FlareTunnel as the main process
-
-Separate omni-boot deployment
-       │
-       └─ HTTPS proxy → FlareTunnel listener
+```mermaid
+graph TB
+    E[Deployment variables and secrets] --> M[FlareTunnel-Manager]
+    M --> C[Cloudflare API]
+    M --> R[0600 temporary runtime]
+    M --> F[FlareTunnel child process]
+    R --> F
+    F --> P[HTTP/HTTPS proxy]
 ```
 
-The manager does not reimplement proxy behavior. It prepares the runtime and then replaces its process with FlareTunnel in `use` mode.
+The manager does not reimplement proxy behavior. It delegates management commands and tunnel operation to the FlareTunnel binary built from the commit pinned in the `Dockerfile`.
 
 ## Features
 
-- One Docker image for local, VPS, and PaaS deployments.
-- FlareTunnel built from an exact pinned Git commit.
-- `create`, `delete`, and `use` modes.
-- Strict validation of Cloudflare account JSON arrays.
-- Bounded deletion through `cleanup --count N --yes`.
-- Temporary credential cleanup.
-- Proxy authentication passed to the child as the internal `AUTH_PROXY_BASIC` variable.
-- Independent cryptographic validation of the MITM and transport CAs.
-- Ephemeral transport server certificates with DNS, IPv4, or IPv6 SANs.
-- Transport CA private-key purge after signing and before the child starts.
+- **Reproducible image** for Docker, VPS, PaaS, and local execution.
+- **Three explicit modes**: `create`, `delete`, and `use`.
+- **Reconciliation against real Cloudflare state**, counting only `flaretunnel-*` Workers.
+- **Bounded deletion**, never requesting more deletion than the configured quantity.
+- **Controlled retries** and continued processing of later accounts after an error.
+- **Strict validation** of account JSON arrays before any operation.
+- **Proxy authentication** through `AUTH_PROXY`, converted to `AUTH_PROXY_BASIC` only for the child.
+- **Separate MITM and transport certificates**, with key/certificate validation.
+- **Ephemeral transport certificate**, generated from startup SAN values.
+- **Credential and temporary-file cleanup**.
+- **Embedded blocklists** selected by level instead of arbitrary user paths.
 
 ## Operating modes
 
-| Mode | Account variable | Result |
+| Mode | Active variable | Behavior |
 | --- | --- | --- |
-| `create` | `CF_CREATE_ACCOUNTS` | Reaches the requested `target_workers` count. |
-| `delete` | `CF_DELETE_ACCOUNTS` | Deletes no more than the requested number of existing Workers. |
-| `use` | `CF_USE_ACCOUNTS` | Discovers endpoints, prepares TLS, and starts the long-running proxy. |
+| `create` | `CF_CREATE_ACCOUNTS` | Reaches `target_workers` `flaretunnel-*` Workers per account. |
+| `delete` | `CF_DELETE_ACCOUNTS` | Removes the requested number of existing Workers. `target_workers` is a deletion quantity. |
+| `use` | `CF_USE_ACCOUNTS` | Discovers endpoints, prepares TLS, and starts the persistent proxy. |
 
-Accounts are processed sequentially. Create and delete operations re-check Cloudflare state before each attempt and continue with later accounts when one account fails.
+Accounts are processed sequentially. In `create`, the manager calculates `missing = target_workers - existing`. In `delete`, each cleanup operation is capped by the number of Workers that actually exist.
 
-## Required variables
+## Configuration
 
-In `use` mode, the required variables are:
+### Required variables in `use` mode
 
 ```env
 MODE=use
@@ -61,38 +68,89 @@ FLARETUNNEL_TRANSPORT_CA_KEY_B64=BASE64_ENCODED_RSA_PRIVATE_KEY
 FLARETUNNEL_TLS_SAN=proxy.example.com 203.0.113.42
 ```
 
-In `create` mode, use `CF_CREATE_ACCOUNTS` with `target_workers`. In `delete` mode, use `CF_DELETE_ACCOUNTS` with `target_workers` set to the maximum number of Workers to remove.
+For `create`, replace `CF_USE_ACCOUNTS` with `CF_CREATE_ACCOUNTS` and add `target_workers`. For `delete`, use `CF_DELETE_ACCOUNTS` and interpret `target_workers` as the maximum number to remove.
 
-The complete line-by-line list and examples are in [`DEPLOYMENT_ENV.md`](DEPLOYMENT_ENV.md).
+The detailed variable reference and line-by-line examples are in [`DEPLOYMENT_ENV.md`](DEPLOYMENT_ENV.md).
 
-## Secrets and certificates
+### Account object
 
-`AUTH_PROXY` is a manager-only JSON object. The manager converts it to Base64 and passes only `AUTH_PROXY_BASIC` to the FlareTunnel process. Do not configure `AUTH_PROXY_BASIC` yourself.
+```json
+[
+  {
+    "name": "main",
+    "api_token": "CLOUDFLARE_API_TOKEN",
+    "account_id": "CLOUDFLARE_ACCOUNT_ID",
+    "target_workers": 20
+  }
+]
+```
 
-The MITM CA and transport CA are independent. The manager validates each private key against its packaged public certificate. It materializes keys only in the runtime with `0600` permissions.
+`name`, `api_token`, and `account_id` are required. `target_workers` is required in `create` and `delete` and must be a non-negative integer. `zone_id` is optional.
 
-In `use` mode, the manager generates a server key and transport server certificate on every start. The certificate contains the SANs from `FLARETUNNEL_TLS_SAN`. The transport CA key is removed as soon as signing completes and is never inherited by FlareTunnel.
+### Proxy authentication
 
-## Docker image
+`AUTH_PROXY` is a strict JSON object. The manager encodes `username:password` as Base64 and passes only the internal `AUTH_PROXY_BASIC` variable to the FlareTunnel child.
 
-The `Dockerfile` uses a multi-stage build:
+```text
+proxy-user:REPLACE_WITH_A_STRONG_PASSWORD
+→ Base64
+→ cHJveHktdXNlcjpSRVBMQUNFX1dJVEhfQV9TVFJPTkdfUEFTU1dPUkQ=
+```
 
-1. clone the FlareTunnel repository;
-2. verify the exact commit `b37ccf2c7f61c536e225107554c90f01b1735558`;
-3. compile FlareTunnel;
-4. compile the manager;
-5. assemble a minimal Alpine image.
+Do not configure `AUTH_PROXY_BASIC` manually. The JSON secret and encoded value are never written to `flaretunnel.json` or operational logs.
 
-The image contains public certificates and the three blacklist files. It contains no private keys.
+## TLS and key handling
 
-Build and run:
+The image embeds the public certificates:
+
+```text
+certs/Flaretunnel-MITM-CA.crt
+certs/Flaretunnel-TRANSPORT-CA.crt
+```
+
+In `use` mode, the manager:
+
+1. validates the MITM key against its public certificate;
+2. validates the transport key against its public certificate;
+3. generates an ephemeral transport server key and certificate;
+4. passes only file paths to the child;
+5. removes the transport CA private key as soon as signing completes;
+6. removes Base64 secrets from the environment inherited by the child.
+
+`FLARETUNNEL_TLS_SAN` accepts DNS names, IPv4 addresses, and IPv6 addresses separated by spaces. `0.0.0.0` and `::` are rejected as certificate identities.
+
+## Embedded blocklists
+
+The runtime contains:
+
+| Level | File | Intended use |
+| --- | --- | --- |
+| `minimal` | `/opt/flaretunnel/blacklist-minimal.txt` | General browsing with moderate savings. |
+| `full` | `/opt/flaretunnel/blacklist.txt` | Stronger savings; assets may be missing. |
+| `aggressive` | `/opt/flaretunnel/blacklist-aggressive.txt` | Targeted automation; browser rendering may break. |
+
+The manager rejects arbitrary blocklist paths and does not support `FLARETUNNEL_BLACKLIST_DIR`.
+
+## Image build
+
+The `Dockerfile`:
+
+1. clones the FlareTunnel repository;
+2. verifies the exact commit `b37ccf2c7f61c536e225107554c90f01b1735558`;
+3. builds FlareTunnel;
+4. builds the manager;
+5. assembles a minimal Alpine image with public certificates and blocklists.
 
 ```bash
 docker build -t flaretunnel-manager:latest .
 docker run --rm --env-file .env -p 8080:8080 flaretunnel-manager:latest
 ```
 
-On a VPS:
+The image exposes port `8080` by default. In `use` mode, the manager becomes FlareTunnel through process replacement, so the container remains active while the proxy runs. `create` and `delete` are batch operations and exit after printing their summary.
+
+## VPS deployment
+
+The VPS does not need Go installed; it runs the OCI image directly.
 
 ```bash
 chmod 600 /secure/path/flaretunnel-manager.env
@@ -104,28 +162,36 @@ docker run -d \
   IMAGE_REFERENCE
 ```
 
-On a PaaS, inject secrets through the platform secret manager and expose `PORT`. Do not rely on filesystem persistence.
+## PaaS deployment
 
-## Runtime files
+Configure variables and secrets in the platform secret manager. Expose `PORT` according to the platform requirements and configure a health check appropriate for `use` mode. Do not assume filesystem persistence: credentials and generated certificates are temporary.
 
-The manager creates a protected temporary directory. Credential files are removed before the tunnel starts. The paths passed to the child are:
+## Security model
 
-```env
-FLARETUNNEL_MITM_CA_CERT=/runtime/Flaretunnel-MITM-CA.crt
-FLARETUNNEL_MITM_CA_KEY=/runtime/Flaretunnel-MITM-CA.key
-FLARETUNNEL_TRANSPORT_CERT=/runtime/Flaretunnel-Transport.crt
-FLARETUNNEL_TRANSPORT_KEY=/runtime/Flaretunnel-Transport.key
+Never commit Cloudflare tokens, private keys, Base64 key values, real `AUTH_PROXY` objects, or production `.env` files. Use `0600` file permissions and the platform secret manager.
+
+Cloudflare tokens must have only the permissions required by the selected operation. Do not disable client-side TLS verification and do not use `NODE_TLS_REJECT_UNAUTHORIZED=0` in systems consuming the proxy.
+
+The runtime does not publish secrets in logs. In `use` mode, the transport CA private key is removed after the server certificate is generated and before the child starts.
+
+## Project structure
+
+```text
+cmd/manager/              Process entry point and mode selection
+internal/business/        Create/delete/use orchestration
+internal/ca/              CA validation and transport certificates
+internal/cloudflare/      Worker discovery and counting
+internal/config/          Variables, defaults, and mode validation
+internal/flaretunnel/     FlareTunnel binary execution contract
+internal/logging/         Secret-redacting logs
+internal/runtime/         Temporary directory lifecycle
+internal/validation/      Account JSON validation
+certs/                    Embedded public certificates
+Dockerfile                Reproducible multi-stage image
+DEPLOYMENT_ENV.md         Deployment variable reference
 ```
 
-These paths are not secrets to inject directly. They are generated by the manager in its runtime.
-
-## Security
-
-Never publish a private key, Base64 secret, ephemeral server certificate, or real `.env` file. Do not use `rejectUnauthorized: false` or `NODE_TLS_REJECT_UNAUTHORIZED=0`.
-
-Cloudflare tokens must follow the principle of least privilege. CA rotation must be coordinated with clients that trust the corresponding public certificate.
-
-## Tests
+## Development and verification
 
 ```bash
 gofmt -w .
@@ -135,32 +201,22 @@ go build ./cmd/manager
 git diff --check
 ```
 
-With Docker available:
+To verify the image build:
 
 ```bash
 docker build -t flaretunnel-manager:test .
 ```
 
-## Project structure
+## License and responsibility
 
-```text
-cmd/manager/              Entry point
-internal/business/        Create/delete/use orchestration
-internal/ca/              CA validation and transport certificates
-internal/cloudflare/      Cloudflare API
-internal/config/          Variables and defaults
-internal/flaretunnel/     FlareTunnel binary contract
-internal/runtime/         Temporary runtime lifecycle
-Dockerfile                Reproducible image
-DEPLOYMENT_ENV.md         Detailed variable reference
-```
+Review the repository license and the terms of the FlareTunnel project used by the image. Operators are responsible for Cloudflare permissions, targeted destinations, and deployment-secret protection.
 
 ## References
 
-- [FlareTunnel](https://github.com/johndoe237/FlareTunnel)
-- [Pinned FlareTunnel commit](https://github.com/johndoe237/FlareTunnel/commit/b37ccf2c7f61c536e225107554c90f01b1735558)
-- [Docker documentation](https://docs.docker.com/)
+- [Cloudflare Workers documentation](https://developers.cloudflare.com/workers/ "Cloudflare Workers")
+- [Docker documentation](https://docs.docker.com/ "Docker documentation")
+- [FlareTunnel](https://github.com/johndoe237/FlareTunnel "FlareTunnel repository")
 
 ---
 
-[Read this documentation in French](README.md)
+[Lire cette documentation en français](README.md)

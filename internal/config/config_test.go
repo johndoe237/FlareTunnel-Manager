@@ -11,8 +11,8 @@ func setEnv(t *testing.T, kv map[string]string) {
 		if _, ok := kv["AUTH_PROXY"]; !ok {
 			kv["AUTH_PROXY"] = `{"username":"test-user","password":"test-password"}`
 		}
-		if _, ok := kv["FLARETUNNEL_CA_KEY_B64"]; !ok {
-			kv["FLARETUNNEL_CA_KEY_B64"] = "test-key"
+		if _, ok := kv["FLARETUNNEL_MITM_CA_KEY_B64"]; !ok {
+			kv["FLARETUNNEL_MITM_CA_KEY_B64"] = "test-key"
 		}
 	}
 	for k, v := range kv {
@@ -21,7 +21,7 @@ func setEnv(t *testing.T, kv map[string]string) {
 		}
 	}
 	if kv["MODE"] == "use" {
-		t.Cleanup(func() { _ = os.Unsetenv("FLARETUNNEL_CA_KEY_B64") })
+		t.Cleanup(func() { _ = os.Unsetenv("FLARETUNNEL_MITM_CA_KEY_B64") })
 	}
 }
 

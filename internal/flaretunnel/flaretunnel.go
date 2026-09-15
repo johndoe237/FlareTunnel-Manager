@@ -124,7 +124,7 @@ func environmentWithOverrides(base []string, updates map[string]string) []string
 	for _, entry := range base {
 		key, _, ok := strings.Cut(entry, "=")
 		if ok {
-			if key == "FLARETUNNEL_CA_KEY_B64" {
+			if key == "FLARETUNNEL_MITM_CA_KEY_B64" {
 				continue
 			}
 			if _, overridden := updates[key]; overridden {
@@ -134,7 +134,7 @@ func environmentWithOverrides(base []string, updates map[string]string) []string
 		result = append(result, entry)
 	}
 	for key, value := range updates {
-		if key == "FLARETUNNEL_CA_KEY_B64" {
+		if key == "FLARETUNNEL_MITM_CA_KEY_B64" {
 			continue
 		}
 		result = append(result, key+"="+value)

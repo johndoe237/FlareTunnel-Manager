@@ -132,11 +132,11 @@ func TestEnvironmentWithOverridesReplacesExistingValues(t *testing.T) {
 
 func TestEnvironmentWithOverridesDoesNotPassCAKeySecret(t *testing.T) {
 	got := environmentWithOverrides(
-		[]string{"PATH=/bin", "FLARETUNNEL_CA_KEY_B64=private"},
+		[]string{"PATH=/bin", "FLARETUNNEL_MITM_CA_KEY_B64=private"},
 		map[string]string{"FLARETUNNEL_CA_CERT_FILE": "/cert", "FLARETUNNEL_CA_KEY_FILE": "/key"},
 	)
 	for _, entry := range got {
-		if strings.HasPrefix(entry, "FLARETUNNEL_CA_KEY_B64=") {
+		if strings.HasPrefix(entry, "FLARETUNNEL_MITM_CA_KEY_B64=") {
 			t.Fatalf("private CA Base64 secret leaked to child environment: %q", entry)
 		}
 	}

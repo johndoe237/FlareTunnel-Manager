@@ -12,9 +12,9 @@ import (
 	"time"
 )
 
-const KeyEnv = "FLARETUNNEL_CA_KEY_B64"
+const KeyEnv = "FLARETUNNEL_MITM_CA_KEY_B64"
 
-const certificateName = "Flaretunnel-CA.crt"
+const certificateName = "Flaretunnel-MITM-CA.crt"
 
 // ResolveCertificate finds the packaged public CA without requiring a
 // deployment-specific path. The Docker image uses its internal application
@@ -71,26 +71,26 @@ func MaterializeKey(certPath, keyB64, keyPath string) error {
 
 	certPEM, err := os.ReadFile(certPath)
 	if err != nil {
-		return fmt.Errorf("cannot read FlareTunnel CA certificate: %w", err)
+		return fmt.Errorf("cannot read FlareTunnel MITM CA certificate: %w", err)
 	}
 	certBlock, _ := pem.Decode(certPEM)
 	if certBlock == nil {
-		return fmt.Errorf("FlareTunnel CA certificate is not valid PEM")
+		return fmt.Errorf("FlareTunnel MITM CA certificate is not valid PEM")
 	}
 	cert, err := x509.ParseCertificate(certBlock.Bytes)
 	if err != nil {
-		return fmt.Errorf("FlareTunnel CA certificate is invalid: %w", err)
+		return fmt.Errorf("FlareTunnel MITM CA certificate is invalid: %w", err)
 	}
 	if !cert.IsCA {
-		return fmt.Errorf("FlareTunnel CA certificate is not a CA")
+		return fmt.Errorf("FlareTunnel MITM CA certificate is not a CA")
 	}
 	now := time.Now()
 	if now.Before(cert.NotBefore) || now.After(cert.NotAfter) {
-		return fmt.Errorf("FlareTunnel CA certificate is not currently valid")
+		return fmt.Errorf("FlareTunnel MITM CA certificate is not currently valid")
 	}
 	publicKey, ok := cert.PublicKey.(*rsa.PublicKey)
 	if !ok || publicKey.N.Cmp(privateKey.N) != 0 || publicKey.E != privateKey.E {
-		return fmt.Errorf("%s does not match the FlareTunnel CA certificate", KeyEnv)
+		return fmt.Errorf("%s does not match the FlareTunnel MITM CA certificate", KeyEnv)
 	}
 
 	file, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)

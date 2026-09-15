@@ -125,9 +125,9 @@ func Load() (*Config, error) {
 		if err != nil {
 			return nil, err
 		}
-		cfg.CAKeyB64 = os.Getenv("FLARETUNNEL_CA_KEY_B64")
+		cfg.CAKeyB64 = os.Getenv("FLARETUNNEL_MITM_CA_KEY_B64")
 		if strings.TrimSpace(cfg.CAKeyB64) == "" {
-			return nil, fmt.Errorf("FLARETUNNEL_CA_KEY_B64 is required in use mode")
+			return nil, fmt.Errorf("FLARETUNNEL_MITM_CA_KEY_B64 is required in use mode")
 		}
 	}
 	return cfg, nil

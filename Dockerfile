@@ -23,7 +23,7 @@ FROM alpine:3.20
 RUN apk add --no-cache ca-certificates
 COPY --from=flaretunnel-build /out/flaretunnel /usr/local/bin/flaretunnel
 COPY --from=manager-build /out/flaretunnel-manager /usr/local/bin/flaretunnel-manager
-COPY certs/Flaretunnel-CA.crt /usr/local/share/flaretunnel-manager/Flaretunnel-CA.crt
+COPY certs/Flaretunnel-MITM-CA.crt /usr/local/share/flaretunnel-manager/Flaretunnel-MITM-CA.crt
 COPY --from=flaretunnel-build /src/flaretunnel/blacklist-minimal.txt /opt/flaretunnel/blacklist-minimal.txt
 COPY --from=flaretunnel-build /src/flaretunnel/blacklist.txt /opt/flaretunnel/blacklist.txt
 COPY --from=flaretunnel-build /src/flaretunnel/blacklist-aggressive.txt /opt/flaretunnel/blacklist-aggressive.txt

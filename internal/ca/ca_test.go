@@ -25,12 +25,12 @@ func testPair(t *testing.T, dir string) (string, string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	certPath := filepath.Join(dir, "Flaretunnel-CA.crt")
+	certPath := filepath.Join(dir, "Flaretunnel-MITM-CA.crt")
 	if err := os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
-	return certPath, base64.StdEncoding.EncodeToString(keyPEM), filepath.Join(dir, "Flaretunnel-CA.key")
+	return certPath, base64.StdEncoding.EncodeToString(keyPEM), filepath.Join(dir, "Flaretunnel-MITM-CA.key")
 }
 
 func TestMaterializeKeyValidatesAndProtectsMatchingKey(t *testing.T) {

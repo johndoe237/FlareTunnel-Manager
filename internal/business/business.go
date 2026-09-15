@@ -265,7 +265,7 @@ func use(ctx context.Context, accounts []validation.Account, runner FlareTunnelR
 	}
 	caKeyPath := ""
 	if caCertPath != "" || caKeyB64 != "" {
-		caKeyPath = filepath.Join(dir, "Flaretunnel-CA.key")
+		caKeyPath = filepath.Join(dir, "Flaretunnel-MITM-CA.key")
 		if err := ca.MaterializeKey(caCertPath, caKeyB64, caKeyPath); err != nil {
 			return fmt.Errorf("CA validation failed: %w", err)
 		}
